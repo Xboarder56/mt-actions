@@ -16,7 +16,7 @@ jobs:
     name: Host tests (native + sanitizers)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Fetch cJSON and reference plugins
         run: |
@@ -37,9 +37,9 @@ jobs:
     name: Differential test vs official runtime
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
@@ -69,7 +69,7 @@ jobs:
 
       - name: Upload traces on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: diff-traces
           path: /tmp/diff-*/
@@ -88,16 +88,16 @@ jobs:
             git -C firmware submodule update --init --recursive "$m"
           done
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           path: firmware/lib/mt-actions
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
       - name: Cache PlatformIO
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.platformio
@@ -118,7 +118,7 @@ jobs:
           diff /tmp/mtr/package/api/edge-o-matic/eom3k/2.1.0-rc.1.json firmware/.pio/build/eom3k/plugin-api.json
 
       - name: Upload firmware
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: eom3k-firmware-${{ env.FIRMWARE_REF }}
           path: |

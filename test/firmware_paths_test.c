@@ -369,6 +369,8 @@ static void test_driver_instances(const char* lovense_path) {
     CHECK(mta_driver_instance_dispatch(inst, "connect", 0, NULL) == 0, "connect");
     CHECK(strstr(_log, "HOST log(lovense: connected)") && strstr(_log, "ud=ctx"), "connect handler:\n%s", _log);
     CHECK(mta_driver_instance_dispatch(inst, "speed_change", 255, &r) == 0, "speed 255");
+    CHECK(r.type == MTA_ARG_STRING_REF && r.val.s && !strcmp(r.val.s, "Vibrate:20;"), "result '_' captured");
+    mta_result_free(&r); // string results are owned by the caller
     CHECK(mta_driver_instance_dispatch(inst, "speed_change", 128, NULL) == 0, "speed 128");
     CHECK(mta_driver_instance_dispatch(inst, "speed_change", 0, NULL) == 0, "speed 0");
     CHECK(mta_driver_instance_dispatch_all("speed_change", 64) == 1, "dispatch_all handled by 1");

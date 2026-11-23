@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CJSON_REF: v1.7.15            # same cJSON as ESP-IDF 4.4.6's json component
+  MT_RUNTIMES_VERSION: 1.0.0    # official runtime used as the behavioral reference
+  EOM_PLUGINS_REF: 18b0523      # reference plugins (MausTec/eom-plugins)
+  FIRMWARE_REF: v2.1.0-rc.1     # firmware release this runtime reconstructs
+
+jobs:
+  host-tests:
+    name: Host tests (native + sanitizers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch cJSON and reference plugins
+        run: |
+          git clone --depth 1 --branch "$CJSON_REF" https://github.com/DaveGamble/cJSON.git /tmp/cjson
+          git clone https://github.com/MausTec/eom-plugins.git /tmp/eom-plugins
+          git -C /tmp/eom-plugins checkout "$EOM_PLUGINS_REF"
+
+      - name: Build test hosts
+        run: |
+          make -C test CJSON_DIR=/tmp/cjson build/mta_host build/mta_host_rtos
+          make -C test CJSON_DIR=/tmp/cjson fwtest \
+            CFLAGS="-std=gnu11 -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined -Wall -Wextra -Wno-unused-parameter"
+
+      - name: Firmware-only paths (event lock/queue, driver instances, permissions)
+        run: test/build/fwtest /tmp/eom-plugins/drivers/lovense/plugin.json
+
+  differential:
+    name: Differential test vs official runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Fetch cJSON, official runtime and reference plugins
+        run: |
+          git clone --depth 1 --branch "$CJSON_REF" https://github.com/DaveGamble/cJSON.git /tmp/cjson
+          git clone https://github.com/MausTec/eom-plugins.git /tmp/eom-plugins
+          git -C /tmp/eom-plugins checkout "$EOM_PLUGINS_REF"
+          mkdir -p /tmp/mtr
+          npm pack --pack-destination /tmp/mtr "@maustec/mt-runtimes@$MT_RUNTIMES_VERSION"
+          tar xzf /tmp/mtr/maustec-mt-runtimes-*.tgz -C /tmp/mtr
+
+      - name: Build test host
+        run: make -C test CJSON_DIR=/tmp/cjson build/mta_host
+
+      - name: Reference plugins
+        run: |
+          python3 test/difftest.py --mta-host test/build/mta_host --runtimes /tmp/mtr/package \
+            --work /tmp/diff-plugins --plugins /tmp/eom-plugins
+
+      - name: Edge-case suites
+        run: |
+          python3 test/gen_atomic.py /tmp/diff-edge
+          python3 test/scenarios_edge.py /tmp/diff-edge
+          python3 test/difftest.py --mta-host test/build/mta_host --runtimes /tmp/mtr/package \
+            --work /tmp/diff-edge /tmp/diff-edge/*.json
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diff-traces
+          path: /tmp/diff-*/
+
+  firmware:
+    name: Build EOM3K firmware
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout firmware at release tag
+        run: |
+          git clone https://github.com/MausTec/edge-o-matic-3000.git firmware
+          git -C firmware checkout --detach "$FIRMWARE_REF"
+          # Initialize every submodule except mt-actions (its upstream repo no longer exists).
+          for m in $(git -C firmware config -f .gitmodules --get-regexp path | awk '{print $2}'); do
+            [ "$m" = "lib/mt-actions" ] && continue
+            git -C firmware submodule update --init --recursive "$m"
+          done
+
+      - uses: actions/checkout@v4
+        with:
+          path: firmware/lib/mt-actions
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: ${{ runner.os }}-pio-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Build
+        working-directory: firmware
+        run: |
+          pip install platformio
+          pio run -e eom3k
+
+      - name: Verify plugin API descriptor matches the published one
+        run: |
+          mkdir -p /tmp/mtr
+          npm pack --pack-destination /tmp/mtr "@maustec/mt-runtimes@1.0.0"
+          tar xzf /tmp/mtr/maustec-mt-runtimes-*.tgz -C /tmp/mtr
+          diff /tmp/mtr/package/api/edge-o-matic/eom3k/2.1.0-rc.1.json firmware/.pio/build/eom3k/plugin-api.json
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: eom3k-firmware-${{ env.FIRMWARE_REF }}
+          path: |
+            firmware/.pio/build/eom3k/firmware.bin
+            firmware/.pio/build/eom3k/bootloader.bin
+            firmware/.pio/build/eom3k/partitions.bin
+            firmware/.pio/build/eom3k/firmware.elf
+            firmware/.pio/build/eom3k/plugin-api.json
+            firmware/.pio/build/eom3k/plugin-api.sha256

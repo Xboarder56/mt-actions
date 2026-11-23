@@ -1,0 +1,65 @@
+{
+  "name": "edge-builtins", "display_name": "Edge Builtins", "type": "feature",
+  "permissions": ["ui:*"],
+  "config": {
+    "level": {"type": "int", "default": 5, "min": 0, "max": 10, "label": "Level"},
+    "on": {"type": "bool", "default": true},
+    "msg": {"type": "string", "default": "hi"}
+  },
+  "variables": {"g": 0, "f": 1.5, "s": "str", "buf[8]": 0, "cnt": 0},
+  "functions": {
+    "twice": {"args": ["x"], "actions": [ {"mul": ["$x", 2]}, {"return": "$_"} ]},
+    "early": {"args": ["x"], "actions": [ {"if": {"gt": ["$x", 5], "then": [ {"return": 99} ]}}, {"return": 1} ]},
+    "bump": {"actions": [ {"inc": "$g"}, {"set": ["$g", "$g"]} ]},
+    "noargs": {"actions": [ {"set": 3} ]},
+    "localv": {"args": ["a"], "vars": {"tmp": 7, "arr[4]": 0}, "actions": [ {"add": ["$a", "$tmp"]}, {"setbyte": ["$arr", 1, "$_"]}, {"getbyte": ["$arr", 1]} ]}
+  },
+  "events": {
+    "arith": {"args": ["n"], "actions": [
+      {"add": ["$n", 1.25]}, {"sub": ["$_", 3]}, {"mul": ["$_", -2]}, {"div": ["$_", 4]}, {"round": "$_"},
+      {"mod": [17, 5]}, {"mod": [17, 0]}, {"div": [1, 0]}, {"round": -2.5}, {"round": 2.4999},
+      {"inc": "$cnt"}, {"dec": "$cnt"}, {"dec": "$cnt"}, {"set": ["$f", 3.75]}, {"add": ["$f", "$cnt"]}
+    ]},
+    "strings": {"actions": [
+      {"strlen": "hello"}, {"charat": ["hello", 1]}, {"charat": ["hello", 9]}, {"charat": ["hello", -1]},
+      {"chr": 65}, {"chr": 300}, {"chr": -1}, {"to_string": 42}, {"to_string": 1.5}, {"to_string": "x"},
+      {"to_string": "$buf"}, {"concat": ["a", "b", "c"]}, {"concat": ["n=", 5]}, {"strcmp": ["a", "b"]},
+      {"strcmp": ["b", "b"]}, {"set": ["$s", "$_"]}, {"add": ["12", "3.5"]}, {"add": ["A", 1]},
+      {"add": ["12abc", 1]}, {"mod": ["7", "2"]}, {"mod": ["", 2]}, {"mod": [7.9, 2]}, {"add": ["", 1]}
+    ]},
+    "arrays": {"args": ["i"], "actions": [
+      {"setbyte": ["$buf", "$i", 300]}, {"getbyte": ["$buf", "$i"]}, {"setbyte": ["$buf", 8, 1]},
+      {"getbyte": ["$buf", -1]}, {"getbyte": ["$g", 0]}, {"setbyte": ["$buf", 2, "x"]}
+    ]},
+    "calls": {"args": ["v"], "actions": [
+      {"@twice": "$v", "to": "$g"}, {"twice": ["$g"]}, {"@early": 9}, {"@early": "$v"}, {"@bump": []},
+      {"@noargs": []}, {"@localv": 5}, {"@twice": "$nope"}, {"@missing": 1}, {"set": ["$cnt", "$g"]}
+    ]},
+    "flow": {"args": ["x"], "actions": [
+      {"unless": {"eq": ["$x", 1], "then": [ {"set": ["$g", 100]} ], "else": [ {"set": ["$g", 200]} ]}},
+      {"if": {"any": [ {"eq": ["$x", 3]}, {"eq": ["$x", 4]} ], "then": [ {"inc": "$g"} ]}},
+      {"if": {"none": [ {"eq": ["$x", 3]} ], "then": [ {"dec": "$g"} ]}},
+      {"if": {"all": [ {"gt": ["$x", 0]}, {"lt": ["$x", 10]} ], "any": [ {"eq": [1,1]} ], "then": [ {"inc": "$cnt"} ]}},
+      {"if": {"eq": ["$x", 2], "gt": ["$x", 1], "then": [ {"inc": "$cnt"} ]}},
+      {"if": {"then": [ {"inc": "$cnt"} ]}},
+      {"set": ["$cnt", 0]},
+      {"while": {"lt": ["$cnt", "$x"], "then": [ {"inc": "$cnt"} ]}},
+      {"while": {"all": [ {"lt": ["$cnt", 0]} ], "then": [ {"inc": "$cnt"} ]}},
+      {"if": {"gte": ["$x", 5], "then": [ {"return": 77} ]}},
+      {"set": 5}
+    ]},
+    "longloop": {"actions": [ {"set": ["$cnt", 0]}, {"while": {"gte": ["$cnt", 0], "then": [ {"inc": "$cnt"} ]}}, {"set": "$cnt"} ]},
+    "config": {"actions": [
+      {"get_config": "level"}, {"get_config": "on"}, {"get_config": "msg"}, {"get_config": "nope"},
+      {"set_config": ["level", 8]}, {"set_config": ["level", 2.7]}, {"set_config": ["msg", "yo"]},
+      {"set_config": ["on", 0]}, {"set_config": ["msg", 5]}, {"get_config": "level"}, {"get_config": "msg"}
+    ]},
+    "errors": {"actions": [
+      {"add": [1]}, {"add": [1, 2, 3]}, {"add": ["$undefined", 1]}, {"inc": 5}, {"inc": "$"}, {"strlen": 5},
+      {"getbyte": [5, 1]}, {"nosuchfn": [1]}, {"notify": "permitted"}, {"set": ["$a1", "$a2"]}
+    ]},
+    "obj_form": {"actions": {"set": ["$g", 11], "inc": "$g", "to": "$cnt"}},
+    "capture": {"actions": [ {"add": [1, 2], "to": "$cnt"}, {"millis": [], "to": "$g"}, {"set": 4}, {"millis": [], "to": "$_"}, {"get_arousal": [], "to": "$g"} ]},
+    "hostret": {"actions": [ {"get_output_mode": [], "to": "$s"}, {"concat": ["$s", "!"]}, {"failing": []}, {"voidfn": [], "to": "$g"} ]}
+  }
+}

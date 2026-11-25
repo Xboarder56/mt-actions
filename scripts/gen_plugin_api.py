@@ -234,16 +234,26 @@ def scan_functions(actions_dir):
     return entries
 
 
-def scan_events(header_path):
-    with open(header_path, "r") as f:
-        source = f.read()
-    defines = extract_defines(source)
-    docs = collect_docs(source, "event")
+def scan_events(header_path, actions_dir=None):
+    sources = [(os.path.basename(header_path), header_path)]
+    if actions_dir and os.path.isdir(actions_dir):
+        for fname in sorted(os.listdir(actions_dir)):
+            if fname.endswith(".c"):
+                sources.append((fname, os.path.join(actions_dir, fname)))
     entries = []
-    for name, perm_raw in EVENT_RE.findall(source):
-        if name not in docs:
-            warn("event '%s' has no @event doc comment" % name)
-        entries.append(build_event(name, resolve_permission(perm_raw, defines), docs.get(name)))
+    seen = set()
+    for label, path in sources:
+        with open(path, "r") as f:
+            source = f.read()
+        defines = extract_defines(source)
+        docs = collect_docs(source, "event")
+        for name, perm_raw in EVENT_RE.findall(source):
+            if name in seen:
+                continue
+            seen.add(name)
+            if name not in docs:
+                warn("event '%s' (%s) has no @event doc comment" % (name, label))
+            entries.append(build_event(name, resolve_permission(perm_raw, defines), docs.get(name)))
     return entries
 
 
@@ -271,8 +281,9 @@ def load_config(project_dir):
 
 def generate(project_dir, output_path, version=None):
     cfg = load_config(project_dir)
-    functions = scan_functions(os.path.join(project_dir, cfg["actions_dir"]))
-    events = scan_events(os.path.join(project_dir, cfg["events_header"]))
+    actions_dir = os.path.join(project_dir, cfg["actions_dir"])
+    functions = scan_functions(actions_dir)
+    events = scan_events(os.path.join(project_dir, cfg["events_header"]), actions_dir)
 
     payload = {
         "$schema": SCHEMA_URL,
